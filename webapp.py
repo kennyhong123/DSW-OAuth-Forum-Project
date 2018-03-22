@@ -1,15 +1,11 @@
 from flask import Flask, redirect, url_for, session, request, jsonify, Markup
 from flask_oauthlib.client import OAuth
 from flask import render_template
-from flask_pymongo import PyMongo
-from bson import ObjectId
-from flask import flash
 
 import pprint
 import os
 import json
 import pymongo
-import sys
 
 app = Flask(__name__)
 
@@ -23,10 +19,10 @@ url = 'mongodb://{}:{}@{}:{}/{}'.format(
         os.environ["MONGO_HOST"],
         os.environ["MONGO_PORT"],
         os.environ["MONGO_DBNAME"])
-    
+
 client = pymongo.MongoClient(url)
 db = client[os.environ["MONGO_DBNAME"]]
-collection = db['forum-posts'] #put the name of your collection in the quotes
+collection = db['holysheep']
 
 oauth = OAuth(app)
 
@@ -61,51 +57,9 @@ def post():
     #This function should add the new post to the JSON file of posts and then render home.html and display the posts.  
     #Every post should include the username of the poster and text of the post.
     if request.form['message'] is '':
-        flash("Type something bud.",'warning') #☭
+        flash("Say something") #☭
     else:
         collection.insert_one({"post":[session['user_data']['login'], request.form['message'], session['user_data']['avatar_url']]})
-    return render_template('home.html', past_posts=posts_to_html())
-
-def posts_to_html():
-    post = ""
-    try:
-        for document in collection.find():
-            post += "<table id='postTable'><tr><td class='un'><b>Username</b></td><td class='post'><b>Post</b></td></tr>" + '<tr>' + '<td class="un">' + '<img src="'+ document['post'][2] + '" class="avatar"><a href=' + '"https://github.com/' + document['post'][0] + '">'+ '@' + document['post'][0] +'</a>' + '</td><td class="post">'
-            swearwords = ['lorax','f-word','c-word','n-word','heckin']
-            if '@' in document['post'][1]:
-                username = ""
-                massage = ""
-                for character in document['post'][1]:
-                    if " " in character:
-                        username = stuff[1].split(" ",1)[0]
-                        massage = stuff[1].split(" ",1)[1]
-                        post+='<a href=' + '"https://github.com/' + username.split("@",1)[1] + '">' + username +'</a>' + '  ' + massage
-            elif swearwords[0] in document['post'][1]:
-                post += "Offensive language is not tolerated."
-            elif swearwords[1] in document['post'][1]:
-                post += "Offensive language is not tolerated."
-            elif swearwords[2] in document['post'][1]:
-                post += "Offensive language is not tolerated."
-            elif swearwords[3] in document['post'][1]:
-                post += "Offensive language is not tolerated."
-            elif swearwords[4] in document['post'][1]:
-                post += "Offensive language is not tolerated."
-            else:
-                post += document['post'][1]
-            if 'github_token' in session:
-                if session['user_data']['login'] == document['post'][0]:
-                    post += '</td><td><form action="/deletePost" method="post"><button type="submit" name="delete" value="'+  str(document.get('_id')) +'" class="btn btn-danger">Delete</button></form></td></tr></table>'
-            post += '</td></tr></table>'
-    except Exception as e:
-        print(e)
-    formattedPost = Markup(post)
-    return formattedPost
-
-@app.route('/deletePost', methods=['POST']) #this does things
-def deletePost():
-    #delete post
-    global collection
-    collection.delete_one({"_id" : ObjectId(str(request.form['delete']))})
     return render_template('home.html', past_posts=posts_to_html())
 
 #redirect to GitHub's OAuth page and confirm callback URL
@@ -116,25 +70,24 @@ def login():
 @app.route('/logout')
 def logout():
     session.clear()
-    flash("You were Logged Out.",'info')
-    return render_template('home.html',past_posts=posts_to_html())
+    return render_template('message.html', message='You were logged out')
 
 @app.route('/login/authorized')
 def authorized():
     resp = github.authorized_response()
     if resp is None:
         session.clear()
-        flash('Access denied: reason=' + request.args['error'] + ' error=' + request.args['error_description'],'warning')       
+        message = 'Access denied: reason=' + request.args['error'] + ' error=' + request.args['error_description'] + ' full=' + pprint.pformat(request.args)      
     else:
         try:
             session['github_token'] = (resp['access_token'], '') #save the token to prove that the user logged in
             session['user_data']=github.get('user').data
-            flash('You were successfully logged in as ' + session['user_data']['login'],'info')
+            message='You were successfully logged in as ' + session['user_data']['login']
         except Exception as inst:
             session.clear()
             print(inst)
-            flash('Unable to login, please try again.','warning')
-    return render_template('home.html',past_posts=posts_to_html())
+            message='Unable to login, please try again.  '
+    return render_template('message.html', message=message)
 
 #the tokengetter is automatically called to check who is logged in.
 @github.tokengetter
